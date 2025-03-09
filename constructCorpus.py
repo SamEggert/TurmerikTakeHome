@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-def convert_from_clinicaltrials_format(clinicaltrials_json, output_file='simplified_trials.jsonl'):
+def convert_from_clinicaltrials_format(clinicaltrials_json, output_file='corpus.jsonl'):
     """
     Convert detailed ClinicalTrials.gov JSON to simplified format and write to a file as a single line.
 
@@ -133,40 +133,69 @@ def convert_from_clinicaltrials_format(clinicaltrials_json, output_file='simplif
 
     return simplified_json
 
-def batch_convert_directory(input_dir, output_file='simplified_trials.jsonl'):
+def process_json_array_file(input_file, output_file='corpus.jsonl'):
     """
-    Convert all JSON files in a directory from ClinicalTrials.gov format to simplified format.
+    Process a JSON file containing an array of studies in ClinicalTrials.gov format
+    and convert each to the simplified format.
 
     Args:
-        input_dir (str): Directory containing ClinicalTrials.gov JSON files
-        output_file (str): Path to the output file
+        input_file (str): Path to the input JSON file
+        output_file (str): Path to the output JSONL file
     """
     # Clear the output file if it exists
     if os.path.exists(output_file):
         os.remove(output_file)
 
-    # Process each file in the directory
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.json'):
-            try:
-                file_path = os.path.join(input_dir, filename)
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
+    try:
+        # Load the entire JSON file
+        with open(input_file, 'r') as f:
+            # Try to parse as a complete JSON array
+            data = json.load(f)
 
-                # Convert and write to output file
-                convert_from_clinicaltrials_format(data, output_file)
-                print(f"Processed {filename}")
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
+            # Process each study in the array
+            for i, study in enumerate(data, 1):
+                try:
+                    # Convert and write to output file
+                    convert_from_clinicaltrials_format(study, output_file)
+                    print(f"Processed study {i}")
+                except Exception as e:
+                    print(f"Error processing study {i}: {e}")
+
+    except json.JSONDecodeError:
+        # If the file is too large or not a valid JSON array, try processing line by line
+        # This assumes each line might be a complete JSON object or part of an array
+        print("Could not parse complete file as JSON. Attempting line-by-line processing...")
+
+        with open(input_file, 'r') as f:
+            content = f.read()
+
+            # Clean up the content: remove the opening bracket and trailing comma
+            content = content.strip()
+            if content.startswith('['):
+                content = content[1:]
+            if content.endswith(','):
+                content = content[:-1]
+            if content.endswith(']'):
+                content = content[:-1]
+
+            # Split by "},{"
+            items = content.split("},")
+            for i, item in enumerate(items):
+                # Fix the JSON format for each item
+                if not item.startswith('{'):
+                    item = '{' + item
+                if not item.endswith('}'):
+                    item = item + '}'
+
+                try:
+                    # Parse and process each item
+                    study = json.loads(item)
+                    convert_from_clinicaltrials_format(study, output_file)
+                    print(f"Processed study {i+1}")
+                except Exception as e:
+                    print(f"Error processing study {i+1}: {e}")
 
 # Example usage
 if __name__ == "__main__":
-    # Example for a single file
-    with open('NCT02490241.json', 'r') as f:
-        detailed_json = json.load(f)
-
-    # Convert single file and write to output
-    simplified_json = convert_from_clinicaltrials_format(detailed_json, 'output.jsonl')
-
-    # Example for batch processing a directory
-    # batch_convert_directory('clinicaltrials_data', 'all_trials.jsonl')
+    # Process the file with multiple studies
+    process_json_array_file('ctg-studies.json', 'corpus.jsonl')
