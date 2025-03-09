@@ -1,0 +1,32 @@
+from synthea.mitre.ord/downloads:
+    downloaded "100 Sample Synthetic Patient Records, C-CDA: 7 MB"
+    it was the only smaller one that was in xml format
+
+
+search query for clinicaltrials.gov:
+    AREA[LocationStatus]COVERAGE[FullMatch]RECRUITING
+    @https://clinicaltrials.gov/expert-search?term=AREA%5BLocationStatus%5DCOVERAGE%5BFullMatch%5DRECRUITING&page=1
+
+
+    what would you like to download?: json
+    datafields: custom set
+
+    protocolSection (9)
+        identificationModule (2)
+            nctId - NCT Number
+            briefTitle
+        descriptionModule (1)
+            briefSUmmary
+        conditionsModule (1)
+            conditions
+        designModule (2)
+            phases - Study phase
+            enrollmentInfo (1)
+                count - Enrollment
+        armsInterventionsModule (2)
+            interventions (2)
+                type - Intervention/Treatment type
+                name - Intervention Name
+        EligibilityModule (1)
+            eligibilityCriteria - Inclusion and exclusion eligibility criteria
+

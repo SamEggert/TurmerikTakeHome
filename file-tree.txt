@@ -1,0 +1,50 @@
+clinical_trial_matcher/
+│
+├── config/
+│   └── config.py           # Configuration settings (API keys, URLs, etc.)
+│
+├── data/
+│   ├── raw/                # Store downloaded patient data from Synthea
+│   ├── processed/          # Preprocessed patient data
+│   └── trials/             # Scraped clinical trial data
+│
+├── src/
+│   ├── __init__.py
+│   ├── data_processing/
+│   │   ├── __init__.py
+│   │   ├── patient_parser.py       # Functions to parse patient XML data
+│   │   └── trial_scraper.py        # Clinical trials.gov scraping functionality
+│   │
+│   ├── matching/
+│   │   ├── __init__.py
+│   │   ├── criteria_checker.py     # Functions to check inclusion/exclusion criteria
+│   │   ├── patient_profile.py      # Class to represent patient attributes
+│   │   └── trial_matcher.py        # Core matching algorithm
+│   │
+│   ├── nlp/
+│   │   ├── __init__.py
+│   │   ├── criteria_analyzer.py    # Parse and understand trial criteria text
+│   │   └── explanation_generator.py # Generate explanations for matches
+│   │
+│   └── utils/
+│       ├── __init__.py
+│       └── helpers.py         # Common utility functions
+│
+├── output/
+│   ├── json/                 # Store output JSON files
+│   └── excel/                # Store output Excel files
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_patient_parser.py
+│   ├── test_trial_scraper.py
+│   ├── test_criteria_checker.py
+│   └── test_trial_matcher.py
+│
+├── notebooks/                # Jupyter notebooks for exploration and visualization
+│   ├── data_exploration.ipynb
+│   └── algorithm_testing.ipynb
+│
+├── main.py                   # Entry point script
+├── requirements.txt          # Project dependencies
+└── README.md                 # Project documentation
