@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import functions from existing files
-from parseXMLs import parse_ccda_file, register_namespaces, extract_key_clinical_info
-from createCorpusDB import process_json_file
-from createVectorDB import create_corpus_db
-from findTrialsByChroma import match_and_rank_trials, print_patient_summary
-from evaluatePatientEligibility import evaluate_patient_eligibility
-from generateOutput import generate_output
+from src.parseXMLs import parse_ccda_file, register_namespaces, extract_key_clinical_info
+from src.createCorpusDB import process_json_file
+from src.createVectorDB import create_corpus_db
+from src.findTrialsByChroma import match_and_rank_trials, print_patient_summary
+from src.evaluatePatientEligibility import evaluate_patient_eligibility
+from src.generateOutput import generate_output
 
 def process_single_patient(
     patient_file_path,

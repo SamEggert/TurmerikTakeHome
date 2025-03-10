@@ -7,11 +7,11 @@ import json
 import sys
 
 # Import from the enhanced parser module
-from parseXMLs import (
+from src.parseXMLs import (
     parse_ccda_file,
     register_namespaces,
-    generate_semantic_search_query,  # Import the new query generator
-    extract_key_clinical_info        # Import the clinical info extractor
+    generate_semantic_search_query,
+    extract_key_clinical_info
 )
 
 def match_patient_to_trials(patient_data, db_path="../data/clinical_trials.db", limit=1000):

@@ -9,7 +9,7 @@ import sys
 
 # Import from the enhanced parser module to parse CCDA files
 sys.path.append('../')  # Add parent directory to path to import custom modules
-from parseXMLs import parse_ccda_file, register_namespaces, extract_key_clinical_info
+from src.parseXMLs import parse_ccda_file, register_namespaces, extract_key_clinical_info
 
 def evaluate_patient_eligibility(
     patient_data: Dict[str, Any],

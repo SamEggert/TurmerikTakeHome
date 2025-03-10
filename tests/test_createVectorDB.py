@@ -1,4 +1,4 @@
-# tests/test_createVectorDB.py
+# tests/test_createVectorDB.py (revised version)
 import unittest
 import os
 import tempfile
@@ -13,6 +13,7 @@ class TestCreateVectorDB(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp()
         self.test_db_path = os.path.join(self.test_dir, "test.db")
         self.test_chroma_path = os.path.join(self.test_dir, "test_chroma")
+        os.makedirs(self.test_chroma_path, exist_ok=True)
 
         # Create a minimal test database
         conn = sqlite3.connect(self.test_db_path)
@@ -75,11 +76,8 @@ class TestCreateVectorDB(unittest.TestCase):
         conn.close()
 
     def tearDown(self):
-        if os.path.exists(self.test_db_path):
-            os.remove(self.test_db_path)
-        if os.path.exists(self.test_chroma_path):
-            shutil.rmtree(self.test_chroma_path)
-        os.rmdir(self.test_dir)
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
 
     @patch('chromadb.PersistentClient')
     @patch('chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction')

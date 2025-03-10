@@ -37,19 +37,44 @@ def load_eligibility_results(input_path):
         return None
 
 def format_simple_results(eligibility_results):
+    """
+    Format eligibility results into a simple format that only includes
+    trials the patient actually matched to.
+
+    Args:
+        eligibility_results: Dictionary containing eligibility results
+
+    Returns:
+        Dictionary with simplified results containing only matched trials
+    """
     patient_id = eligibility_results.get("patient_id", "unknown")
     eligible_trials = []
-    # Iterate over trial evaluations (assumes they are stored in "results")
-    for trial in eligibility_results.get("results", []):
-        if "evaluation" in trial:
+
+    # Check the trial results
+    trial_results = eligibility_results.get("results", [])
+
+    for trial in trial_results:
+        # Skip if there's an error or no evaluation
+        if 'error' in trial or 'evaluation' not in trial:
+            continue
+
+        evaluation = trial.get('evaluation', [])
+
+        # Check if all criteria are met (this is how eligibility is determined)
+        all_criteria_met = all(criterion.get('is_met', False) for criterion in evaluation)
+
+        if all_criteria_met:
             # Extract only criteria names that were met
-            criteria_met = [criterion["criterion"] for criterion in trial["evaluation"] if criterion.get("is_met")]
-            if criteria_met:  # Only include trials where some criteria are met
+            criteria_met = [criterion.get("criterion", "") for criterion in evaluation
+                        if criterion.get("is_met") == True]
+
+            if criteria_met:  # Only include trials where criteria are met
                 eligible_trials.append({
                     "trialId": trial.get("trial_id", ""),
                     "trialName": trial.get("trial_title", ""),
                     "eligibilityCriteriaMet": criteria_met
                 })
+
     return {
         "patientId": patient_id,
         "eligibleTrials": eligible_trials
