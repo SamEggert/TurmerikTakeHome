@@ -296,7 +296,7 @@ def main():
     parser = argparse.ArgumentParser(description="Clinical Trial Matching Pipeline")
 
     parser.add_argument("--patient", "-p", type=str,
-                      default="../data/synthea_sample_data_ccda_latest/Ada662_Sari509_Balistreri607_dbc4a3f7-9c69-4435-3ce3-4e1988ab6b91.xml",
+                      default="../data/synthea_sample_data_ccda_latest/",
                       help="Path to a single patient CCDA XML file or a directory of patient files")
 
     parser.add_argument("--trials-json", "-j", type=str,
@@ -316,7 +316,7 @@ def main():
                       help="Directory to store output files")
 
     parser.add_argument("--sample-size", type=int,
-                      default=5000,
+                      default=10000,
                       help="Number of trials to sample from the JSON (default: 5000)")
 
     parser.add_argument("--batch-size", "-b", type=int,
@@ -324,7 +324,7 @@ def main():
                       help="Number of trials to process in each batch for vector DB creation (default: 100)")
 
     parser.add_argument("--top-k", "-k", type=int,
-                      default=10,
+                      default=25,
                       help="Number of top trials to evaluate for eligibility (default: 10)")
 
     parser.add_argument("--model", "-m", type=str,
@@ -332,7 +332,7 @@ def main():
                       help="LLM model to use for eligibility evaluation (default: gpt-4o-mini)")
 
     parser.add_argument("--max-patients", type=int,
-                      default=20,
+                      default=10,
                       help="Maximum number of patients to process (default: 20, 0 for all)")
 
     args = parser.parse_args()

@@ -383,6 +383,274 @@ def save_excel_output_alternative(dataframes, output_dir, patient_id):
         logger.error(f"Error in alternative Excel creation: {str(e)}")
         return None
 
+def create_consolidated_json(all_patient_results, output_dir):
+    """
+    Create a consolidated JSON file with data from all patients.
+
+    Args:
+        all_patient_results: List of formatted patient result dictionaries
+        output_dir: Directory to save the consolidated file
+
+    Returns:
+        Path to the saved consolidated JSON file
+    """
+    logger.info("Creating consolidated JSON file with all patient data")
+
+    # Create a consolidated structure
+    consolidated_data = {
+        "generation_date": datetime.now().strftime("%Y-%m-%d"),
+        "total_patients": len(all_patient_results),
+        "patients": []
+    }
+
+    # Add summaries of each patient and their eligible trials
+    for patient_result in all_patient_results:
+        patient_id = patient_result.get("patient_id", "Unknown")
+        eligible_trials = patient_result.get("eligible_trials", [])
+
+        patient_summary = {
+            "patient_id": patient_id,
+            "evaluation_date": patient_result.get("evaluation_date", "Unknown"),
+            "total_trials_evaluated": patient_result.get("total_trials_evaluated", 0),
+            "eligible_trials_count": len(eligible_trials),
+            "ineligible_trials_count": len(patient_result.get("ineligible_trials", [])),
+            "eligible_trials": eligible_trials
+        }
+
+        consolidated_data["patients"].append(patient_summary)
+
+    # Save consolidated JSON
+    date_stamp = datetime.now().strftime("%Y%m%d")
+    output_file = os.path.join(output_dir, f"all_patients_consolidated_{date_stamp}.json")
+
+    try:
+        with open(output_file, 'w') as f:
+            json.dump(consolidated_data, f, indent=2)
+        logger.info(f"Consolidated JSON saved to {output_file}")
+        return output_file
+    except Exception as e:
+        logger.error(f"Error saving consolidated JSON: {str(e)}")
+        return None
+
+def create_comprehensive_excel(all_patient_results, output_dir):
+    """
+    Create a comprehensive Excel file with detailed data from all patients.
+
+    Args:
+        all_patient_results: List of formatted patient result dictionaries
+        output_dir: Directory to save the consolidated file
+
+    Returns:
+        Path to the saved comprehensive Excel file
+    """
+    logger.info("Creating comprehensive Excel file with all patient data")
+
+    # Prepare DataFrames
+    # 1. Patient summary
+    patient_summary_data = []
+    # 2. All eligible trials
+    all_eligible_trials_data = []
+    # 3. All eligible trials criteria
+    all_criteria_data = []
+
+    # Fill the DataFrames with data from each patient
+    for patient_result in all_patient_results:
+        patient_id = patient_result.get("patient_id", "Unknown")
+
+        # Patient summary
+        patient_summary_data.append({
+            "Patient ID": patient_id,
+            "Evaluation Date": patient_result.get("evaluation_date", "Unknown"),
+            "Total Trials Evaluated": patient_result.get("total_trials_evaluated", 0),
+            "Eligible Trials": len(patient_result.get("eligible_trials", [])),
+            "Ineligible Trials": len(patient_result.get("ineligible_trials", [])),
+            "Indeterminate Trials": len(patient_result.get("indeterminate_trials", []))
+        })
+
+        # All eligible trials for this patient
+        for trial in patient_result.get("eligible_trials", []):
+            trial_id = trial.get("trial_id", "")
+            trial_title = trial.get("trial_title", "")
+
+            all_eligible_trials_data.append({
+                "Patient ID": patient_id,
+                "Trial ID": trial_id,
+                "Trial Title": trial_title,
+                "Semantic Score": trial.get("semantic_score", 0),
+                "Number of Criteria": len(trial.get("criteria_summary", [])),
+                "Link": f"https://clinicaltrials.gov/study/{trial_id}"
+            })
+
+            # All criteria for this trial
+            for criterion in trial.get("criteria_summary", []):
+                all_criteria_data.append({
+                    "Patient ID": patient_id,
+                    "Trial ID": trial_id,
+                    "Trial Title": trial_title,
+                    "Criterion": criterion.get("criterion", ""),
+                    "Is Met": "Yes" if criterion.get("is_met", False) else "No",
+                    "Confidence": criterion.get("confidence", "").capitalize(),
+                    "Rationale": criterion.get("rationale", ""),
+                    "Medications": ", ".join(criterion.get("medications_and_supplements", []))
+                })
+
+    # Create DataFrames
+    patient_summary_df = pd.DataFrame(patient_summary_data)
+    all_eligible_trials_df = pd.DataFrame(all_eligible_trials_data)
+    all_criteria_df = pd.DataFrame(all_criteria_data)
+
+    # Sort DataFrames
+    if not patient_summary_df.empty:
+        patient_summary_df = patient_summary_df.sort_values("Patient ID")
+
+    if not all_eligible_trials_df.empty:
+        all_eligible_trials_df = all_eligible_trials_df.sort_values(["Patient ID", "Semantic Score"], ascending=[True, False])
+
+    if not all_criteria_df.empty:
+        all_criteria_df = all_criteria_df.sort_values(["Patient ID", "Trial ID"])
+
+    # Save to Excel
+    date_stamp = datetime.now().strftime("%Y%m%d")
+    output_file = os.path.join(output_dir, f"all_patients_comprehensive_{date_stamp}.xlsx")
+
+    try:
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            patient_summary_df.to_excel(writer, sheet_name='Patient Summary', index=False)
+
+            if not all_eligible_trials_df.empty:
+                all_eligible_trials_df.to_excel(writer, sheet_name='All Eligible Trials', index=False)
+
+            if not all_criteria_df.empty:
+                all_criteria_df.to_excel(writer, sheet_name='All Eligibility Criteria', index=False)
+
+        logger.info(f"Comprehensive Excel file saved to {output_file}")
+        return output_file
+    except Exception as e:
+        logger.error(f"Error saving comprehensive Excel: {str(e)}")
+
+        # Try alternative method
+        try:
+            logger.info("Attempting alternative Excel creation method...")
+
+            csv_dir = os.path.join(output_dir, "temp_csv")
+            os.makedirs(csv_dir, exist_ok=True)
+
+            summary_csv = os.path.join(csv_dir, "all_patients_summary.csv")
+            trials_csv = os.path.join(csv_dir, "all_eligible_trials.csv")
+            criteria_csv = os.path.join(csv_dir, "all_eligibility_criteria.csv")
+
+            patient_summary_df.to_csv(summary_csv, index=False)
+            all_eligible_trials_df.to_csv(trials_csv, index=False)
+            all_criteria_df.to_csv(criteria_csv, index=False)
+
+            # Now load CSVs and create Excel
+            with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+                pd.read_csv(summary_csv).to_excel(writer, sheet_name='Patient Summary', index=False)
+                pd.read_csv(trials_csv).to_excel(writer, sheet_name='All Eligible Trials', index=False)
+                pd.read_csv(criteria_csv).to_excel(writer, sheet_name='All Eligibility Criteria', index=False)
+
+            logger.info(f"Comprehensive Excel file saved to {output_file} (alternative method)")
+            return output_file
+        except Exception as alt_e:
+            logger.error(f"Alternative method also failed: {str(alt_e)}")
+            return None
+
+def process_single_eligibility_file(file_path, output_dir):
+    """
+    Process a single eligibility results file.
+
+    Args:
+        file_path: Path to the eligibility results JSON file
+        output_dir: Directory to save output files
+
+    Returns:
+        Dictionary with output file paths and formatted results
+    """
+    # Load the eligibility results
+    eligibility_results = load_eligibility_results(file_path)
+    if not eligibility_results:
+        logger.error(f"Failed to load eligibility results from {file_path}")
+        return {"error": f"Failed to load eligibility results from {file_path}"}
+
+    patient_id = eligibility_results.get("patient_id", "unknown")
+
+    # Format results for output
+    formatted_results = format_results_for_output(eligibility_results)
+
+    # Save JSON output
+    json_path = save_json_output(formatted_results, output_dir)
+
+    # Create DataFrames for tabular output
+    dataframes = create_dataframes(formatted_results)
+
+    # Save Excel output
+    excel_path = save_excel_output(
+        dataframes,
+        output_dir,
+        patient_id
+    )
+
+    # Return output paths and formatted results
+    return {
+        "patient_id": patient_id,
+        "json_path": json_path,
+        "excel_path": excel_path,
+        "formatted_results": formatted_results  # Include the formatted results for consolidation
+    }
+
+def generate_output(eligibility_results_path, output_dir):
+    """
+    Generate JSON and Excel output from eligibility results.
+
+    Args:
+        eligibility_results_path: Path to the eligibility results JSON file(s)
+        output_dir: Directory to save output files
+
+    Returns:
+        Dictionary with output file paths
+    """
+    # Handle both single file and directory paths
+    if os.path.isdir(eligibility_results_path):
+        # Process all JSON files in the directory
+        json_files = glob.glob(os.path.join(eligibility_results_path, "*.json"))
+        logger.info(f"Found {len(json_files)} JSON files in {eligibility_results_path}")
+
+        all_outputs = []
+        all_formatted_results = []
+
+        for json_file in json_files:
+            result = process_single_eligibility_file(json_file, output_dir)
+            if result and "error" not in result:
+                all_outputs.append(result)
+                # Store formatted results for consolidated output
+                if "formatted_results" in result:
+                    all_formatted_results.append(result["formatted_results"])
+
+        # If we have multiple patients, create consolidated outputs
+        if len(all_formatted_results) > 1:
+            # Create consolidated JSON with all patient data
+            consolidated_json = create_consolidated_json(all_formatted_results, output_dir)
+
+            # Create comprehensive Excel with all patient data
+            comprehensive_excel = create_comprehensive_excel(all_formatted_results, output_dir)
+
+            # Also create the existing summary spreadsheet for backward compatibility
+            summary_file = create_summary_spreadsheet(all_outputs, output_dir)
+
+            return {
+                "individual_outputs": all_outputs,
+                "summary_spreadsheet": summary_file,
+                "consolidated_json": consolidated_json,
+                "comprehensive_excel": comprehensive_excel
+            }
+        elif len(all_outputs) == 1:
+            return all_outputs[0]
+        else:
+            return {"error": "No valid eligibility results processed"}
+    else:
+        # Process single file
+        return process_single_eligibility_file(eligibility_results_path, output_dir)
+
 def create_summary_spreadsheet(output_files, output_dir):
     """
     Create a summary spreadsheet with data from all patients.
@@ -449,87 +717,6 @@ def create_summary_spreadsheet(output_files, output_dir):
         logger.error(f"Error saving summary file: {str(e)}")
         return None
 
-def process_single_eligibility_file(file_path, output_dir):
-    """
-    Process a single eligibility results file.
-
-    Args:
-        file_path: Path to the eligibility results JSON file
-        output_dir: Directory to save output files
-
-    Returns:
-        Dictionary with output file paths
-    """
-    # Load the eligibility results
-    eligibility_results = load_eligibility_results(file_path)
-    if not eligibility_results:
-        logger.error(f"Failed to load eligibility results from {file_path}")
-        return {"error": f"Failed to load eligibility results from {file_path}"}
-
-    patient_id = eligibility_results.get("patient_id", "unknown")
-
-    # Format results for output
-    formatted_results = format_results_for_output(eligibility_results)
-
-    # Save JSON output
-    json_path = save_json_output(formatted_results, output_dir)
-
-    # Create DataFrames for tabular output
-    dataframes = create_dataframes(formatted_results)
-
-    # Save Excel output
-    excel_path = save_excel_output(
-        dataframes,
-        output_dir,
-        patient_id
-    )
-
-    # Return output paths
-    return {
-        "patient_id": patient_id,
-        "json_path": json_path,
-        "excel_path": excel_path
-    }
-
-def generate_output(eligibility_results_path, output_dir):
-    """
-    Generate JSON and Excel output from eligibility results.
-
-    Args:
-        eligibility_results_path: Path to the eligibility results JSON file(s)
-        output_dir: Directory to save output files
-
-    Returns:
-        Dictionary with output file paths
-    """
-    # Handle both single file and directory paths
-    if os.path.isdir(eligibility_results_path):
-        # Process all JSON files in the directory
-        json_files = glob.glob(os.path.join(eligibility_results_path, "*.json"))
-        logger.info(f"Found {len(json_files)} JSON files in {eligibility_results_path}")
-
-        all_outputs = []
-
-        for json_file in json_files:
-            result = process_single_eligibility_file(json_file, output_dir)
-            if result and "error" not in result:
-                all_outputs.append(result)
-
-        # Create a summary spreadsheet if we have multiple patients
-        if len(all_outputs) > 1:
-            summary_file = create_summary_spreadsheet(all_outputs, output_dir)
-            return {
-                "individual_outputs": all_outputs,
-                "summary_spreadsheet": summary_file
-            }
-        elif len(all_outputs) == 1:
-            return all_outputs[0]
-        else:
-            return {"error": "No valid eligibility results processed"}
-    else:
-        # Process single file
-        return process_single_eligibility_file(eligibility_results_path, output_dir)
-
 def main():
     """
     Main function to parse command line arguments and generate output files.
@@ -558,7 +745,18 @@ def main():
     elif "individual_outputs" in results:
         # Multi-patient results
         logger.info(f"Output generation completed successfully for {len(results['individual_outputs'])} patients.")
-        logger.info(f"Summary spreadsheet: {results.get('summary_spreadsheet', 'None')}")
+
+        # Log summary spreadsheet
+        if "summary_spreadsheet" in results:
+            logger.info(f"Summary spreadsheet: {results.get('summary_spreadsheet', 'None')}")
+
+        # Log consolidated JSON
+        if "consolidated_json" in results:
+            logger.info(f"Consolidated JSON with all patient data: {results.get('consolidated_json', 'None')}")
+
+        # Log comprehensive Excel
+        if "comprehensive_excel" in results:
+            logger.info(f"Comprehensive Excel with all patient data: {results.get('comprehensive_excel', 'None')}")
     else:
         # Single patient results
         logger.info("Output generation completed successfully:")
