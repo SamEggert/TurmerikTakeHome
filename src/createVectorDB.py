@@ -161,9 +161,9 @@ def create_corpus_db(sqlite_path, chroma_path, batch_size=100):
 
 def main():
     parser = argparse.ArgumentParser(description="Create a vector database from clinical trials data")
-    parser.add_argument("--sqlite", "-s", type=str, default="data/clinical_trials.db",
+    parser.add_argument("--sqlite", "-s", type=str, default="../data/clinical_trials.db",
                       help="Path to the SQLite database file")
-    parser.add_argument("--output", "-o", type=str, default="data/chroma_db",
+    parser.add_argument("--output", "-o", type=str, default="../data/chroma_db",
                       help="Path where ChromaDB will be stored")
     parser.add_argument("--batch-size", "-b", type=int, default=100,
                       help="Number of trials to process in each batch")

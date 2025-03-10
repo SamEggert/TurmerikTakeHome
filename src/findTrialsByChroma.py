@@ -466,6 +466,11 @@ def match_and_rank_trials(file_path, db_path, chroma_path, output_path, top_k=No
     print("\nRanking matched trials using enhanced semantic search query...")
     ranked_trials = rank_matched_trials(matched_trials, patient_data, chroma_path, top_k)
 
+    # Make sure the output directory exists for the specified output_path
+    output_dir = os.path.dirname(output_path)
+    if output_dir:  # Only create if there's a directory specified
+        os.makedirs(output_dir, exist_ok=True)
+
     # Write results to output file
     with open(output_path, 'w') as f:
         # Write enhanced patient summary
@@ -523,6 +528,10 @@ def main():
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output) if os.path.dirname(args.output) else '.', exist_ok=True)
+
+    output_dir = os.path.dirname(args.output)
+    if output_dir:  # Only create if there's a directory specified
+        os.makedirs(output_dir, exist_ok=True)
 
     match_and_rank_trials(args.patient, args.sqlite, args.chroma, args.output, args.top)
 

@@ -66,7 +66,7 @@ def print_trial_summary(document):
 
 def main():
     parser = argparse.ArgumentParser(description="Test ChromaDB clinical trials vector database")
-    parser.add_argument("--chroma", "-c", type=str, default="data/chroma_db",
+    parser.add_argument("--chroma", "-c", type=str, default="../data/chroma_db",
                       help="Path to the ChromaDB directory")
 
     args = parser.parse_args()
