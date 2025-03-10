@@ -329,22 +329,22 @@ def main():
 
     parser.add_argument("--sample-size", type=int,
                       default=10000,
-                      help="Number of trials to sample from the JSON (default: 5000)")
+                      help="Number of trials to sample from the JSON (default: 10000)")
 
     parser.add_argument("--batch-size", "-b", type=int,
                       default=100,
                       help="Number of trials to process in each batch for vector DB creation (default: 100)")
 
     parser.add_argument("--top-k", "-k", type=int,
-                      default=25,
-                      help="Number of top trials to evaluate for eligibility (default: 10)")
+                      default=10,
+                      help="Number of top trials to evaluate for eligibility (default: 20)")
 
     parser.add_argument("--model", "-m", type=str,
                       default="gpt-4o-mini",
                       help="LLM model to use for eligibility evaluation (default: gpt-4o-mini)")
 
     parser.add_argument("--max-patients", type=int,
-                      default=10,
+                      default=50,
                       help="Maximum number of patients to process (default: 20, 0 for all)")
 
     args = parser.parse_args()
