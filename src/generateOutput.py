@@ -36,6 +36,26 @@ def load_eligibility_results(input_path):
         logger.error(f"Error loading eligibility results: {str(e)}")
         return None
 
+def format_simple_results(eligibility_results):
+    patient_id = eligibility_results.get("patient_id", "unknown")
+    eligible_trials = []
+    # Iterate over trial evaluations (assumes they are stored in "results")
+    for trial in eligibility_results.get("results", []):
+        if "evaluation" in trial:
+            # Extract only criteria names that were met
+            criteria_met = [criterion["criterion"] for criterion in trial["evaluation"] if criterion.get("is_met")]
+            if criteria_met:  # Only include trials where some criteria are met
+                eligible_trials.append({
+                    "trialId": trial.get("trial_id", ""),
+                    "trialName": trial.get("trial_title", ""),
+                    "eligibilityCriteriaMet": criteria_met
+                })
+    return {
+        "patientId": patient_id,
+        "eligibleTrials": eligible_trials
+    }
+
+
 def format_results_for_output(eligibility_results):
     """
     Format eligibility results into a structured format for output.
@@ -146,6 +166,21 @@ def save_json_output(formatted_results, output_dir):
     except Exception as e:
         logger.error(f"Error saving JSON results: {str(e)}")
         return None
+
+def create_simple_dataframe(formatted_results):
+    # formatted_results is the output from format_simple_results
+    patient_id = formatted_results.get("patientId", "unknown")
+    rows = []
+    for trial in formatted_results.get("eligibleTrials", []):
+        rows.append({
+            "Patient ID": patient_id,
+            "Trial ID": trial.get("trialId", ""),
+            "Trial Name": trial.get("trialName", ""),
+            # Join the list of met criteria into a single string (or keep it as a list if preferred)
+            "Eligibility Criteria Met": ", ".join(trial.get("eligibilityCriteriaMet", []))
+        })
+    return pd.DataFrame(rows)
+
 
 def create_dataframes(formatted_results):
     """
@@ -558,13 +593,6 @@ def create_comprehensive_excel(all_patient_results, output_dir):
 def process_single_eligibility_file(file_path, output_dir):
     """
     Process a single eligibility results file.
-
-    Args:
-        file_path: Path to the eligibility results JSON file
-        output_dir: Directory to save output files
-
-    Returns:
-        Dictionary with output file paths and formatted results
     """
     # Load the eligibility results
     eligibility_results = load_eligibility_results(file_path)
@@ -574,40 +602,55 @@ def process_single_eligibility_file(file_path, output_dir):
 
     patient_id = eligibility_results.get("patient_id", "unknown")
 
-    # Format results for output
+    # Format results for both detailed and simple output
     formatted_results = format_results_for_output(eligibility_results)
+    simple_results = format_simple_results(eligibility_results)
 
-    # Save JSON output
+    # Save JSON output (both formats)
     json_path = save_json_output(formatted_results, output_dir)
 
-    # Create DataFrames for tabular output
+    # Save simple JSON format
+    simple_json_path = os.path.join(output_dir, f"patient_{patient_id}_simple_eligibility_{datetime.now().strftime('%Y%m%d')}.json")
+    with open(simple_json_path, 'w') as f:
+        json.dump(simple_results, f, indent=2)
+    logger.info(f"Simple JSON results saved to {simple_json_path}")
+
+    # Create DataFrames for tabular output (original detailed format)
     dataframes = create_dataframes(formatted_results)
 
-    # Save Excel output
+    # Create simple dataframe
+    simple_df = create_simple_dataframe(simple_results)
+
+    # Save Excel output (original format)
     excel_path = save_excel_output(
         dataframes,
         output_dir,
         patient_id
     )
 
+    # Save simple Excel output
+    simple_excel_path = os.path.join(output_dir, f"patient_{patient_id}_simple_eligibility_{datetime.now().strftime('%Y%m%d')}.xlsx")
+    try:
+        simple_df.to_excel(simple_excel_path, sheet_name='Eligible Trials', index=False)
+        logger.info(f"Simple Excel results saved to {simple_excel_path}")
+    except Exception as e:
+        logger.error(f"Error saving simple Excel results: {str(e)}")
+        simple_excel_path = None
+
     # Return output paths and formatted results
     return {
         "patient_id": patient_id,
         "json_path": json_path,
         "excel_path": excel_path,
-        "formatted_results": formatted_results  # Include the formatted results for consolidation
+        "simple_json_path": simple_json_path,
+        "simple_excel_path": simple_excel_path,
+        "formatted_results": formatted_results,  # Include the formatted results for consolidation
+        "simple_results": simple_results  # Include simple results
     }
 
 def generate_output(eligibility_results_path, output_dir):
     """
     Generate JSON and Excel output from eligibility results.
-
-    Args:
-        eligibility_results_path: Path to the eligibility results JSON file(s)
-        output_dir: Directory to save output files
-
-    Returns:
-        Dictionary with output file paths
     """
     # Handle both single file and directory paths
     if os.path.isdir(eligibility_results_path):
@@ -617,6 +660,7 @@ def generate_output(eligibility_results_path, output_dir):
 
         all_outputs = []
         all_formatted_results = []
+        all_simple_results = []
 
         for json_file in json_files:
             result = process_single_eligibility_file(json_file, output_dir)
@@ -625,14 +669,44 @@ def generate_output(eligibility_results_path, output_dir):
                 # Store formatted results for consolidated output
                 if "formatted_results" in result:
                     all_formatted_results.append(result["formatted_results"])
+                if "simple_results" in result:
+                    all_simple_results.append(result["simple_results"])
 
         # If we have multiple patients, create consolidated outputs
         if len(all_formatted_results) > 1:
-            # Create consolidated JSON with all patient data
+            # Create consolidated JSON with all patient data (original format)
             consolidated_json = create_consolidated_json(all_formatted_results, output_dir)
 
-            # Create comprehensive Excel with all patient data
+            # Create comprehensive Excel with all patient data (original format)
             comprehensive_excel = create_comprehensive_excel(all_formatted_results, output_dir)
+
+            # Create consolidated simple format
+            simple_consolidated = {
+                "patients": all_simple_results
+            }
+            simple_consolidated_path = os.path.join(output_dir, f"all_patients_simple_{datetime.now().strftime('%Y%m%d')}.json")
+            with open(simple_consolidated_path, 'w') as f:
+                json.dump(simple_consolidated, f, indent=2)
+
+            # Create simple Excel with all patients
+            simple_rows = []
+            for patient in all_simple_results:
+                patient_id = patient.get("patientId", "unknown")
+                for trial in patient.get("eligibleTrials", []):
+                    row = {
+                        "Patient ID": patient_id,
+                        "Trial ID": trial.get("trialId", ""),
+                        "Trial Name": trial.get("trialName", ""),
+                        "Eligibility Criteria Met": ", ".join(trial.get("eligibilityCriteriaMet", []))
+                    }
+                    simple_rows.append(row)
+
+            if simple_rows:
+                simple_all_df = pd.DataFrame(simple_rows)
+                simple_all_excel = os.path.join(output_dir, f"all_patients_simple_{datetime.now().strftime('%Y%m%d')}.xlsx")
+                simple_all_df.to_excel(simple_all_excel, sheet_name='Eligible Trials', index=False)
+            else:
+                simple_all_excel = None
 
             # Also create the existing summary spreadsheet for backward compatibility
             summary_file = create_summary_spreadsheet(all_outputs, output_dir)
@@ -641,7 +715,9 @@ def generate_output(eligibility_results_path, output_dir):
                 "individual_outputs": all_outputs,
                 "summary_spreadsheet": summary_file,
                 "consolidated_json": consolidated_json,
-                "comprehensive_excel": comprehensive_excel
+                "comprehensive_excel": comprehensive_excel,
+                "simple_consolidated_json": simple_consolidated_path,
+                "simple_consolidated_excel": simple_all_excel
             }
         elif len(all_outputs) == 1:
             return all_outputs[0]

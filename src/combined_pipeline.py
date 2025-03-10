@@ -280,14 +280,26 @@ def run_pipeline(
         if isinstance(summary_results, dict) and "summary_spreadsheet" in summary_results:
             print(f"Summary spreadsheet: {summary_results.get('summary_spreadsheet', 'None')}")
 
+        # Highlight the simple format outputs
+        print(f"Simple format files have been generated in {summary_output_dir}")
+        print(f"Simple JSON file: {os.path.join(summary_output_dir, 'all_patients_simple_' + datetime.now().strftime('%Y%m%d') + '.json')}")
+        print(f"Simple Excel file: {os.path.join(summary_output_dir, 'all_patients_simple_' + datetime.now().strftime('%Y%m%d') + '.xlsx')}")
+
         return {
             "patient_results": patient_results,
             "summary_dir": summary_output_dir,
-            "summary_results": summary_results
+            "summary_results": summary_results,
+            "simple_json": os.path.join(summary_output_dir, 'all_patients_simple_' + datetime.now().strftime('%Y%m%d') + '.json'),
+            "simple_excel": os.path.join(summary_output_dir, 'all_patients_simple_' + datetime.now().strftime('%Y%m%d') + '.xlsx')
         }
     elif len(patient_results) == 1:
-        # Return the single patient result
-        return patient_results[0]
+        # Return the single patient result with simple format outputs highlighted
+        output_files = patient_results[0].get('output_files', {})
+        return {
+            **patient_results[0],
+            "simple_json": output_files.get('simple_json_path'),
+            "simple_excel": output_files.get('simple_excel_path')
+        }
     else:
         print("No patients were successfully processed.")
         return None
@@ -362,27 +374,32 @@ def main():
         max_patients=args.max_patients
     )
 
+    # Inside main() function, in the final output section, add:
     if final_output:
         print(f"\nPipeline completed successfully!")
 
         # Check if we processed multiple patients
         if "patient_results" in final_output:
+            # Multi-patient case
             patient_count = len(final_output.get("patient_results", []))
             print(f"Processed {patient_count} patients")
             print(f"Summary directory: {final_output.get('summary_dir', 'Unknown')}")
 
-            # Print summary spreadsheet path if available
-            summary_results = final_output.get("summary_results", {})
-            if isinstance(summary_results, dict) and "summary_spreadsheet" in summary_results:
-                print(f"Summary spreadsheet: {summary_results.get('summary_spreadsheet', 'None')}")
+            # Print paths to the simple format files
+            print(f"\nSIMPLE FORMAT OUTPUT:")
+            print(f"Simple JSON file: {final_output.get('simple_json', 'Not available')}")
+            print(f"Simple Excel file: {final_output.get('simple_excel', 'Not available')}")
+
+            # Rest of output...
         else:
-            # Single patient results
+            # Single patient case
             print(f"Eligibility results saved to: {final_output.get('eligibility_results', 'Unknown')}")
 
-            output_files = final_output.get('output_files', {})
-            if output_files:
-                print(f"Formatted JSON saved to: {output_files.get('json_path', 'None')}")
-                print(f"Excel file saved to: {output_files.get('excel_path', 'None')}")
+            print(f"\nSIMPLE FORMAT OUTPUT:")
+            print(f"Simple JSON file: {final_output.get('simple_json', 'Not available')}")
+            print(f"Simple Excel file: {final_output.get('simple_excel', 'Not available')}")
+
+            # Rest of output...
     else:
         print("\nPipeline failed to complete.")
 
