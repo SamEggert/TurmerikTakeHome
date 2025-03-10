@@ -205,8 +205,8 @@ def main():
     Main function to handle command line arguments and run the program.
     """
     # Default values
-    file_path = "data/synthea_sample_data_ccda_latest/Yolanda648_Baca589_355f70c7-b1f4-b1db-8843-56b8b193a30c.xml"
-    db_path = "clinical_trials.db"
+    file_path = "../data/synthea_sample_data_ccda_latest/Yolanda648_Baca589_355f70c7-b1f4-b1db-8843-56b8b193a30c.xml"
+    db_path = "../data/clinical_trials.db"
     limit = 100  # Default limit on number of trials to return
 
     # Parse command line arguments if provided

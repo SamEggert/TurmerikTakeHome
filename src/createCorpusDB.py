@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import re
+import random
 from typing import Dict, List, Any, Optional, Tuple
 import os
 
@@ -403,13 +404,15 @@ def insert_trial_data(db_path: str, parsed_data: Dict[str, Any]):
     conn.commit()
     conn.close()
 
-def process_json_file(json_file_path: str, db_path: str):
+def process_json_file(json_file_path: str, db_path: str, sample_size: int = 1000):
     """
     Process a JSON file containing clinical trial data and insert into SQLite database.
+    Allows sampling a specific number of trials from the dataset.
 
     Args:
         json_file_path: Path to the JSON file containing trial data
         db_path: Path where the SQLite database should be created/updated
+        sample_size: Number of trials to sample from the dataset (default: 1000)
 
     Returns:
         Tuple of (total_trials, processed_trials)
@@ -422,32 +425,43 @@ def process_json_file(json_file_path: str, db_path: str):
         with open(json_file_path, 'r') as file:
             data = json.load(file)
 
-            total_trials = 0
-            processed_trials = 0
-
             # Handle array of trials
             if isinstance(data, list):
                 total_trials = len(data)
-                for i, trial in enumerate(data):
+                print(f"Found {total_trials} trials in the dataset")
+
+                # Sample trials if the dataset is larger than the sample size
+                if total_trials > sample_size:
+                    sampled_trials = random.sample(data, sample_size)
+                    print(f"Sampling {sample_size} trials from the dataset")
+                else:
+                    sampled_trials = data
+                    print(f"Using all {total_trials} trials (sample size {sample_size} is larger than dataset)")
+
+                processed_trials = 0
+                for i, trial in enumerate(sampled_trials):
                     try:
                         parsed_data = parse_clinical_trial_eligibility(trial)
                         insert_trial_data(db_path, parsed_data)
                         processed_trials += 1
 
-                        # Print progress every 100 trials
-                        if (i + 1) % 100 == 0:
-                            print(f"Processed {i + 1}/{total_trials} trials")
+                        # Print progress every 100 trials or 10% of sample size, whichever is smaller
+                        progress_interval = min(100, max(1, sample_size // 10))
+                        if (i + 1) % progress_interval == 0:
+                            print(f"Processed {i + 1}/{len(sampled_trials)} trials ({(i+1)/len(sampled_trials)*100:.1f}%)")
                     except Exception as e:
                         print(f"Error processing trial: {e}")
             else:
                 # Handle single trial
                 total_trials = 1
+                print("Found a single trial in the dataset")
                 try:
                     parsed_data = parse_clinical_trial_eligibility(data)
                     insert_trial_data(db_path, parsed_data)
-                    processed_trials += 1
+                    processed_trials = 1
                 except Exception as e:
                     print(f"Error processing trial: {e}")
+                    processed_trials = 0
 
             return total_trials, processed_trials
     except Exception as e:
@@ -458,16 +472,33 @@ def main():
     """
     Main function to process the clinical trial data and create a SQLite database.
     """
+    import argparse
+
+    # Set up command line argument parsing
+    parser = argparse.ArgumentParser(description="Process clinical trial data from JSON to SQLite database with sampling option")
+    parser.add_argument("--sample", "-s", type=int, default=1000,
+                        help="Number of trials to sample from the dataset (default: 1000)")
+    parser.add_argument("--input", "-i", type=str, default="../data/ctg-studies.json",
+                        help="Path to the JSON file with clinical trial data")
+    parser.add_argument("--output", "-o", type=str, default="../data/clinical_trials.db",
+                        help="Path where the SQLite database will be created")
+
+    args = parser.parse_args()
+
     # Configuration settings
-    json_file_path = "ctg-studies.json"  # Path to the JSON file with clinical trial data
-    db_path = "clinical_trials.db"       # Path where the SQLite database will be created
+    json_file_path = args.input   # Path to the JSON file with clinical trial data
+    db_path = args.output         # Path where the SQLite database will be created
+    sample_size = args.sample     # Number of trials to sample
 
     print(f"Processing clinical trial data from {json_file_path}...")
     print(f"Creating/updating database at {db_path}")
+    print(f"Sampling {sample_size} trials")
 
-    total, processed = process_json_file(json_file_path, db_path)
+    total, processed = process_json_file(json_file_path, db_path, sample_size)
 
-    print(f"Processing complete: {processed}/{total} trials successfully processed")
+    print(f"Processing complete: {processed}/{sample_size} trials successfully processed")
+    if total > sample_size:
+        print(f"Sampled {sample_size} out of {total} total trials in the dataset")
 
 if __name__ == "__main__":
     main()
