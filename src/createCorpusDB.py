@@ -476,8 +476,8 @@ def main():
 
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description="Process clinical trial data from JSON to SQLite database with sampling option")
-    parser.add_argument("--sample", "-s", type=int, default=1000,
-                        help="Number of trials to sample from the dataset (default: 1000)")
+    parser.add_argument("--sample", "-s", type=int, default=5000,
+                        help="Number of trials to sample from the dataset (default: 5000)")
     parser.add_argument("--input", "-i", type=str, default="../data/ctg-studies.json",
                         help="Path to the JSON file with clinical trial data")
     parser.add_argument("--output", "-o", type=str, default="../data/clinical_trials.db",

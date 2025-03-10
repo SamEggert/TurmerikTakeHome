@@ -509,20 +509,20 @@ def match_and_rank_trials(file_path, db_path, chroma_path, output_path, top_k=No
 def main():
     parser = argparse.ArgumentParser(description="Match and rank clinical trials for a patient")
     parser.add_argument("--patient", "-p", type=str,
-                      default="../data/synthea_sample_data_ccda_latest/Yolanda648_Baca589_355f70c7-b1f4-b1db-8843-56b8b193a30c.xml",
-                      help="Path to the C-CDA XML file")
+                    default="../data/synthea_sample_data_ccda_latest/Yolanda648_Baca589_355f70c7-b1f4-b1db-8843-56b8b193a30c.xml",
+                    help="Path to the C-CDA XML file")
     parser.add_argument("--sqlite", "-s", type=str,
-                      default="../data/clinical_trials.db",
-                      help="Path to the SQLite database file")
+                    default="../data/clinical_trials.db",
+                    help="Path to the SQLite database file")
     parser.add_argument("--chroma", "-c", type=str,
-                      default="../data/chroma_db",
-                      help="Path to the ChromaDB directory")
+                    default="../data/chroma_db",
+                    help="Path to the ChromaDB directory")
     parser.add_argument("--output", "-o", type=str,
-                      default="../data/matched_trials_results.txt",
-                      help="Path to save results")
+                    default="../data/matched_trials_results.txt",
+                    help="Path to save results")
     parser.add_argument("--top", "-k", type=int,
-                      default=None,
-                      help="Number of top results to return (default: all)")
+                    default=10,
+                    help="Number of top results to return (default: 10)")
 
     args = parser.parse_args()
 

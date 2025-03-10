@@ -269,11 +269,11 @@ def main():
         patient_data["key_clinical_info"] = extract_key_clinical_info(patient_data)
 
     # Run evaluation with default parameters
-    print(f"Evaluating patient eligibility for top 20 trials...")
+    print(f"Evaluating patient eligibility for top 10 trials...")
     results = evaluate_patient_eligibility(
         patient_data=patient_data,
         trials_json_path=ranked_trials_json,
-        top_k=20
+        top_k=10
     )
 
     # Save results
