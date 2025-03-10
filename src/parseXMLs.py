@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 import json
 import pandas as pd
 from datetime import datetime
+import re
 
 # Define namespaces used in C-CDA
 namespaces = {
@@ -39,7 +40,8 @@ def parse_ccda_file(file_path):
             "medications": extract_medications(root),
             "labs": extract_lab_results(root),
             "procedures": extract_procedures(root),
-            "vitals": extract_vitals(root)
+            "vitals": extract_vitals(root),
+            "clinicalNotes": extract_clinical_notes(root)  # Add clinical notes extraction
         }
 
         return patient_data
@@ -459,6 +461,143 @@ def extract_vitals(root):
 
     return vitals
 
+def extract_clinical_notes(root):
+    """Extract clinical notes from C-CDA document"""
+    notes = []
+
+    try:
+        # Common clinical note section codes
+        note_section_codes = [
+            "11488-4",  # Consultation Note
+            "18842-5",  # Discharge Summary
+            "28570-0",  # Procedure Note
+            "34117-2",  # History and Physical Note
+            "34839-1",  # Progress Note
+            "51845-6",  # Assessment and Plan
+            "51847-2",  # Evaluation Note
+            "47039-3",  # Hospital Admission Diagnosis
+            "8648-8",   # Hospital Course
+            "10184-0"   # Surgical Operation Note
+        ]
+
+        # Find all matching sections
+        for section_code in note_section_codes:
+            section = find_section_by_code(root, section_code)
+            if section is not None:
+                # Get section title
+                title_element = section.find('.//{{{0}}}title'.format(namespaces['cda']))
+                section_title = title_element.text if title_element is not None and title_element.text else f"Note Section {section_code}"
+
+                # Get text content
+                text_element = section.find('.//{{{0}}}text'.format(namespaces['cda']))
+                if text_element is not None:
+                    # Extract pure text and remove XML formatting
+                    text_content = get_text_from_element(text_element)
+
+                    if text_content:
+                        # Get date for this note if available
+                        effective_time = section.find('.//{{{0}}}effectiveTime'.format(namespaces['cda']))
+                        note_date = None
+                        if effective_time is not None:
+                            low_element = effective_time.find('.//{{{0}}}low'.format(namespaces['cda']))
+                            if low_element is not None:
+                                note_date = low_element.get('value', '')
+                            else:
+                                note_date = effective_time.get('value', '')
+
+                            if note_date and len(note_date) >= 8:
+                                year = note_date[:4]
+                                month = note_date[4:6]
+                                day = note_date[6:8]
+                                note_date = f"{year}-{month}-{day}"
+
+                        note = {
+                            "type": section_title,
+                            "code": section_code,
+                            "date": note_date,
+                            "content": text_content
+                        }
+                        notes.append(note)
+
+        # If we didn't find specific note sections, look for general clinical documents
+        if not notes:
+            # Check for document-level narrative
+            component = root.find('.//{{{0}}}component'.format(namespaces['cda']))
+            if component is not None:
+                structured_body = component.find('.//{{{0}}}structuredBody'.format(namespaces['cda']))
+                if structured_body is not None:
+                    for comp in structured_body.findall('.//{{{0}}}component'.format(namespaces['cda'])):
+                        section = comp.find('.//{{{0}}}section'.format(namespaces['cda']))
+                        if section is not None:
+                            title_element = section.find('.//{{{0}}}title'.format(namespaces['cda']))
+                            if title_element is not None and title_element.text:
+                                section_title = title_element.text
+                                text_element = section.find('.//{{{0}}}text'.format(namespaces['cda']))
+                                if text_element is not None:
+                                    text_content = get_text_from_element(text_element)
+                                    if text_content:
+                                        note = {
+                                            "type": section_title,
+                                            "content": text_content
+                                        }
+                                        notes.append(note)
+
+    except Exception as e:
+        print(f"Error extracting clinical notes: {str(e)}")
+
+    return notes
+
+def get_text_from_element(element):
+    """
+    Extract clean text from an XML element, stripping tags but preserving structure.
+    Args:
+        element: XML element containing text
+
+    Returns:
+        str: Clean text content
+    """
+    if element is None:
+        return ""
+
+    # First try to get element text directly
+    result = ""
+    if element.text:
+        result += element.text.strip() + " "
+
+    # Process paragraph elements
+    for paragraph in element.findall('.//{{{0}}}paragraph'.format(namespaces['cda'])):
+        if paragraph.text:
+            result += paragraph.text.strip() + "\n"
+        # Get text from all children
+        for child in paragraph:
+            if child.text:
+                result += child.text.strip() + " "
+            if child.tail:
+                result += child.tail.strip() + " "
+
+    # Process list items
+    for item in element.findall('.//{{{0}}}item'.format(namespaces['cda'])):
+        if item.text:
+            result += "- " + item.text.strip() + "\n"
+        # Get text from all children
+        for child in item:
+            if child.text:
+                result += child.text.strip() + " "
+            if child.tail:
+                result += child.tail.strip() + " "
+
+    # Process content referenced by IDs
+    for content in element.findall('.//{{{0}}}content'.format(namespaces['cda'])):
+        if content.text:
+            result += content.text.strip() + " "
+
+    # Clean up the text - replace multiple spaces with single space
+    result = re.sub(r'\s+', ' ', result)
+    # Remove XML tags that might have been included as text
+    result = re.sub(r'<[^>]+>', '', result)
+
+    return result.strip()
+
 def process_ccda_directory(directory_path, output_json_path):
     """
     Process all C-CDA files in a directory and save the extracted data to a JSON file.
@@ -510,6 +649,7 @@ def create_patient_summary(patient_data_list):
             "medications_count": len(patient["medications"]),
             "labs_count": len(patient["labs"]),
             "procedures_count": len(patient["procedures"]),
+            "notes_count": len(patient["clinicalNotes"]),
             "conditions": ", ".join([c["name"] for c in patient["conditions"] if "name" in c and c["name"]]),
             "medications": ", ".join([m["name"] for m in patient["medications"] if "name" in m and m["name"]])
         }
@@ -517,16 +657,367 @@ def create_patient_summary(patient_data_list):
 
     return pd.DataFrame(summaries)
 
+def generate_semantic_search_query(patient_data):
+    """
+    Generate a semantic search query for clinical trial matching based on patient data.
+
+    Args:
+        patient_data: Dictionary containing patient information
+
+    Returns:
+        str: A natural language query for semantic search
+    """
+    query_parts = []
+
+    # Add demographic information
+    demographics = patient_data.get("demographics", {})
+    if demographics:
+        age = demographics.get("age")
+        gender = demographics.get("gender")
+        if age and gender:
+            if gender == "M":
+                query_parts.append(f"{age}-year-old male patient")
+            elif gender == "F":
+                query_parts.append(f"{age}-year-old female patient")
+            else:
+                query_parts.append(f"{age}-year-old patient")
+        elif age:
+            query_parts.append(f"{age}-year-old patient")
+        elif gender:
+            if gender == "M":
+                query_parts.append("Male patient")
+            elif gender == "F":
+                query_parts.append("Female patient")
+
+    # Add primary conditions (up to 3 most recent)
+    conditions = patient_data.get("conditions", [])
+    if conditions:
+        # Sort by onset date if available, most recent first
+        sorted_conditions = sorted(
+            [c for c in conditions if "name" in c and c["name"]],
+            key=lambda x: x.get("onsetDate", ""),
+            reverse=True
+        )
+
+        condition_names = [c["name"] for c in sorted_conditions[:3]]
+        if condition_names:
+            if len(condition_names) == 1:
+                query_parts.append(f"diagnosed with {condition_names[0]}")
+            else:
+                conditions_text = ", ".join(condition_names[:-1]) + f" and {condition_names[-1]}"
+                query_parts.append(f"diagnosed with {conditions_text}")
+
+    # Add relevant medications (up to 3)
+    medications = patient_data.get("medications", [])
+    if medications:
+        med_names = [m["name"] for m in medications[:3] if "name" in m and m["name"]]
+        if med_names:
+            if len(med_names) == 1:
+                query_parts.append(f"currently taking {med_names[0]}")
+            else:
+                meds_text = ", ".join(med_names[:-1]) + f" and {med_names[-1]}"
+                query_parts.append(f"currently taking {meds_text}")
+
+    # Add significant lab values (abnormal results)
+    labs = patient_data.get("labs", [])
+    abnormal_labs = []
+
+    for lab in labs:
+        if "name" in lab and "value" in lab:
+            lab_name = lab["name"]
+            lab_value = lab["value"]
+            lab_unit = lab.get("unit", "")
+            ref_range = lab.get("referenceRange", "")
+
+            # Check if outside reference range if available
+            if ref_range and "-" in ref_range:
+                try:
+                    range_parts = ref_range.split("-")
+                    low = float(range_parts[0].strip())
+                    high = float(range_parts[1].strip())
+                    value = float(lab_value)
+
+                    if value < low or value > high:
+                        abnormal_labs.append(f"{lab_name} {lab_value} {lab_unit}")
+                except:
+                    pass
+
+    if abnormal_labs and len(abnormal_labs) <= 2:
+        abnormal_text = " and ".join(abnormal_labs)
+        query_parts.append(f"with abnormal {abnormal_text}")
+
+    # Add recent procedures (up to 2 most recent)
+    procedures = patient_data.get("procedures", [])
+    if procedures:
+        # Sort by date if available, most recent first
+        sorted_procedures = sorted(
+            [p for p in procedures if "name" in p and p["name"]],
+            key=lambda x: x.get("date", ""),
+            reverse=True
+        )
+
+        procedure_names = [p["name"] for p in sorted_procedures[:2]]
+        if procedure_names:
+            if len(procedure_names) == 1:
+                query_parts.append(f"underwent {procedure_names[0]}")
+            else:
+                procedures_text = " and ".join(procedure_names)
+                query_parts.append(f"underwent {procedures_text}")
+
+    # Extract key information from clinical notes
+    clinical_notes = patient_data.get("clinicalNotes", [])
+
+    # First, look for assessment and plan notes
+    assessment_notes = [note for note in clinical_notes if
+                       "type" in note and
+                       ("Assessment" in note["type"] or "Plan" in note["type"])]
+
+    if assessment_notes:
+        # Get the most recent assessment note
+        latest_note = sorted(assessment_notes, key=lambda x: x.get("date", ""), reverse=True)[0]
+        note_content = latest_note.get("content", "")
+
+        # Extract key phrases (simplified approach)
+        # Look for sentences with important medical terms
+        important_terms = ["recommended", "referred", "indicated", "suspected",
+                         "diagnosed", "assessment", "plan", "follow-up", "risk",
+                         "monitoring", "considering", "evaluated", "eligible"]
+
+        sentences = re.split(r'[.!?]', note_content)
+        relevant_sentences = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and any(term in sentence.lower() for term in important_terms):
+                # Limit sentence length
+                if len(sentence) < 100:
+                    relevant_sentences.append(sentence)
+
+        if relevant_sentences:
+            # Take up to 2 relevant sentences
+            for sentence in relevant_sentences[:2]:
+                query_parts.append(f"note: {sentence}")
+
+    # Compile the final query
+    if query_parts:
+        return " ".join(query_parts)
+    else:
+        return "patient requires clinical trial matching"
+
+def extract_key_clinical_info(patient_data):
+    """
+    Extract key clinical information from patient data for improved semantic search.
+
+    Args:
+        patient_data: Dictionary containing patient information
+
+    Returns:
+        dict: Dictionary with key clinical information
+    """
+    key_info = {
+        "demographic_summary": "",
+        "condition_summary": "",
+        "medication_summary": "",
+        "lab_summary": "",
+        "procedure_summary": "",
+        "clinical_notes_summary": "",
+        "semantic_search_query": ""
+    }
+
+    # Demographics summary
+    demographics = patient_data.get("demographics", {})
+    if demographics:
+        demo_parts = []
+
+        if "age" in demographics:
+            demo_parts.append(f"Age: {demographics['age']}")
+
+        if "gender" in demographics:
+            gender_map = {"M": "Male", "F": "Female"}
+            gender = gender_map.get(demographics.get("gender", ""), demographics.get("gender", ""))
+            demo_parts.append(f"Gender: {gender}")
+
+        if "race" in demographics:
+            demo_parts.append(f"Race: {demographics['race']}")
+
+        if "ethnicity" in demographics:
+            demo_parts.append(f"Ethnicity: {demographics['ethnicity']}")
+
+        if demo_parts:
+            key_info["demographic_summary"] = "; ".join(demo_parts)
+
+    # Conditions summary
+    conditions = patient_data.get("conditions", [])
+    if conditions:
+        # Sort by onset date if available
+        sorted_conditions = sorted(
+            [c for c in conditions if "name" in c and c["name"]],
+            key=lambda x: x.get("onsetDate", ""),
+            reverse=True
+        )
+
+        condition_items = []
+        for condition in sorted_conditions:
+            item = condition["name"]
+            if "onsetDate" in condition and condition["onsetDate"]:
+                item += f" (onset: {condition['onsetDate']})"
+            if "status" in condition and condition["status"]:
+                item += f" - {condition['status']}"
+            condition_items.append(item)
+
+        if condition_items:
+            key_info["condition_summary"] = "; ".join(condition_items)
+
+    # Medications summary
+    medications = patient_data.get("medications", [])
+    if medications:
+        medication_items = []
+        for med in medications:
+            if "name" in med and med["name"]:
+                item = med["name"]
+                if "dose" in med and med["dose"] and "unit" in med and med["unit"]:
+                    item += f" {med['dose']} {med['unit']}"
+                if "startDate" in med and med["startDate"]:
+                    item += f" (started: {med['startDate']})"
+                medication_items.append(item)
+
+        if medication_items:
+            key_info["medication_summary"] = "; ".join(medication_items)
+
+    # Labs summary - focus on abnormal results
+    labs = patient_data.get("labs", [])
+    abnormal_labs = []
+    normal_labs = []
+
+    for lab in labs:
+        if "name" in lab and "value" in lab:
+            lab_name = lab["name"]
+            lab_value = lab["value"]
+            lab_unit = lab.get("unit", "")
+            ref_range = lab.get("referenceRange", "")
+            date = lab.get("date", "")
+
+            lab_item = f"{lab_name}: {lab_value} {lab_unit}"
+            if date:
+                lab_item += f" ({date})"
+
+            # Check if outside reference range if available
+            if ref_range and "-" in ref_range:
+                try:
+                    range_parts = ref_range.split("-")
+                    low = float(range_parts[0].strip())
+                    high = float(range_parts[1].strip())
+                    value = float(lab_value)
+
+                    if value < low or value > high:
+                        lab_item += f" [Abnormal: ref range {ref_range} {lab_unit}]"
+                        abnormal_labs.append(lab_item)
+                    else:
+                        normal_labs.append(lab_item)
+                except:
+                    normal_labs.append(lab_item)
+            else:
+                normal_labs.append(lab_item)
+
+    # Prioritize abnormal labs in the summary
+    lab_items = abnormal_labs + normal_labs[:max(0, 5-len(abnormal_labs))]  # Include up to 5 labs total
+    if lab_items:
+        key_info["lab_summary"] = "; ".join(lab_items)
+
+    # Procedures summary
+    procedures = patient_data.get("procedures", [])
+    if procedures:
+        # Sort by date if available, most recent first
+        sorted_procedures = sorted(
+            [p for p in procedures if "name" in p and p["name"]],
+            key=lambda x: x.get("date", ""),
+            reverse=True
+        )
+
+        procedure_items = []
+        for proc in sorted_procedures:
+            item = proc["name"]
+            if "date" in proc and proc["date"]:
+                item += f" ({proc['date']})"
+            procedure_items.append(item)
+
+        if procedure_items:
+            key_info["procedure_summary"] = "; ".join(procedure_items)
+
+    # Clinical notes summary - extract key information
+    clinical_notes = patient_data.get("clinicalNotes", [])
+    if clinical_notes:
+        # Sort by date if available, most recent first
+        sorted_notes = sorted(
+            [n for n in clinical_notes if "content" in n and n["content"]],
+            key=lambda x: x.get("date", ""),
+            reverse=True
+        )
+
+        note_summaries = []
+        for note in sorted_notes[:3]:  # Include up to 3 most recent notes
+            note_type = note.get("type", "Clinical Note")
+            note_date = note.get("date", "")
+            note_content = note.get("content", "")
+
+            # Truncate long notes and add an indicator
+            content_summary = note_content[:200] + "..." if len(note_content) > 200 else note_content
+
+            summary = f"{note_type}"
+            if note_date:
+                summary += f" ({note_date})"
+            summary += f": {content_summary}"
+
+            note_summaries.append(summary)
+
+        if note_summaries:
+            key_info["clinical_notes_summary"] = "\n\n".join(note_summaries)
+
+    # Generate semantic search query
+    key_info["semantic_search_query"] = generate_semantic_search_query(patient_data)
+
+    return key_info
+
+def save_patient_data_with_summary(patient_data_list, output_json_path):
+    """
+    Process patient data with summaries and save to JSON.
+
+    Args:
+        patient_data_list: List of patient data dictionaries
+        output_json_path: Path to save enhanced output JSON file
+    """
+    enhanced_patient_data = []
+
+    for patient_data in patient_data_list:
+        # Extract key information
+        key_clinical_info = extract_key_clinical_info(patient_data)
+
+        # Add key information to patient data
+        enhanced_data = patient_data.copy()
+        enhanced_data["key_clinical_info"] = key_clinical_info
+
+        enhanced_patient_data.append(enhanced_data)
+
+    # Save the enhanced data to JSON
+    with open(output_json_path, 'w') as json_file:
+        json.dump(enhanced_patient_data, json_file, indent=2)
+
+    print(f"Enhanced patient data with clinical summaries and semantic search queries saved to {output_json_path}")
+    return enhanced_patient_data
+
 # Example usage
 if __name__ == "__main__":
     # Register namespaces
     register_namespaces()
 
     # Path to directory containing C-CDA files
-    ccda_directory = "data/synthea_sample_data_ccda_latest"
+    ccda_directory = "../data/synthea_sample_data_ccda_latest"
 
     # Path to save output JSON
-    output_json = "patient_data.json"
+    output_json = "../data/patient_data.json"
+
+    # Path to save enhanced output JSON with summaries
+    enhanced_output_json = "../data/enhanced_patient_data.json"
 
     # Process all C-CDA files
     patient_data_list = process_ccda_directory(ccda_directory, output_json)
@@ -536,3 +1027,11 @@ if __name__ == "__main__":
         summary_df = create_patient_summary(patient_data_list)
         summary_df.to_csv("patient_summary.csv", index=False)
         print(f"Summary saved to patient_summary.csv")
+
+        # Save enhanced patient data with clinical summaries and semantic search queries
+        enhanced_data = save_patient_data_with_summary(patient_data_list, enhanced_output_json)
+
+        # Example of generating a semantic search query for the first patient
+        if enhanced_data:
+            print("\nExample Semantic Search Query:")
+            print(enhanced_data[0]["key_clinical_info"]["semantic_search_query"])
