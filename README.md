@@ -1,172 +1,164 @@
+# Clinical Trial Matcher (TurmerikAI Take Home)
 
-# TumerikTakeHome
+A system for matching patients to actively recruiting clinical trials based on their CCDA (Consolidated Clinical Document Architecture) records.
 
-This repository contains instructions for obtaining and organizing both patient and trial data.
+## Overview
 
-## Data Sources
+This pipeline automates the process of matching patients to clinical trials by:
 
-### 1. Patient Data: Synthetic CCDA Records
+1. Scraping actively recruiting trials from ClinicalTrials.gov
+2. Creating a SQLite database for demographic filtering (age, gender)
+3. Building a ChromaDB vector database for semantic search
+4. Using LLM (GPT-4o-mini) to evaluate patient eligibility based on conditions and medications
+5. Generating comprehensive output in JSON and Excel formats
 
-- **Source:** [Synthea Sample Data - CCDA](https://synthetichealth.github.io/synthea-sample-data/downloads/latest/synthea_sample_data_ccda_latest.zip)
-- **Description:** 100 Sample Synthetic Patient Records in CCDA (XML) format (~7 MB)
+## Prerequisites
 
-### 2. Trial Data: Actively Recruiting Clinical Trials
+* Python 3.7+
+* OpenAI API key
 
-- **Source:** [ClinicalTrials.gov Expert Search](https://clinicaltrials.gov/expert-search?term=AREA%5BLocationStatus%5DCOVERAGE%5BFullMatch%5DRECRUITING)
-- **Download Instructions:**
-  1. Navigate to the link above.
-  2. Click the **Download** button (located under the search results).
-  3. Under **What would you like to download?**, select:
-     - **File format:** JSON
-     - **Results to Download:** ALL
-     - **Data Fields:** Custom set (choose only the following fields):
-       - **protocolSection (18)** – Protocol Section
-         - **identificationModule (18):**
-           - `nctId` – NCT Number
-           - `briefTitle` – Brief Title
-       - **descriptionModule (1):**
-         - `briefSummary`
-       - **conditionsModule (1):**
-         - `conditions` – Condition/Disease
-       - **designModule (2):**
-         - `phases` – Study Phase
-         - **enrollmentInfo (1):**
-           - `count` – Enrollment
-       - **armsInterventionsModule (2):**
-         - **interventions (2):**
-           - `type` – Intervention/Treatment Type
-           - `name` – Intervention Name
-       - **eligibilityModule (10):**
-         - `eligibilityCriteria`
-         - `healthyVolunteers`
-         - `sex`
-         - `genderBased`
-         - `genderDescription`
-         - `minimumAge`
-         - `maximumAge`
-         - `stdAges`
-         - `studyPopulation`
-         - `samplingMethod`
-- **Result:** The downloaded file should be named `ctg-studies.json`.
+## Setup Instructions
 
-## Directory Structure
-
-Organize your project files in the following structure:
-
-```python
-project-root/
-├── data/
-│   ├── synthea_sample_data_ccda_latest/   # Extracted patient data files
-│   ├── synthea_sample_data_ccda_latest.zip
-│   └── ctg-studies.json                    # Trial data file
-└── README.md
-
-```
-
-
-## Instructions
-
-1. **Download Patient Data:**
-
-   - Download the Synthea sample data (CCDA format) from the [link](https://synthetichealth.github.io/synthea-sample-data/downloads/latest/synthea_sample_data_ccda_latest.zip).
-   - Extract the downloaded ZIP file. The resulting folder should be named `synthea_sample_data_ccda_latest`.
-2. **Download Trial Data:**
-
-   - Follow the instructions in the **Trial Data** section.
-   - After downloading, ensure the file is named `ctg-studies.json`.
-3. **Organize Files:**
-
-   - Create a directory named `data` in the project root.
-   - Move both the extracted Synthea sample data folder and the `ctg-studies.json` file into the `data` directory.
-
-
-## Environment and Pipeline Setup
-
-### 1. Create a Virtual Environment and Install Dependencies
-
-Ensure you have Python 3.7+ installed. Then, create a virtual environment and install the required packages. For example:
+### 1. Clone the Repository
 
 ```bash
-# Create and activate a virtual environment (Linux/macOS)
+git clone [repository-url]
+cd clinical-trial-matcher
+```
+
+### 2. Create a Virtual Environment
+
+```bash
+# Create a virtual environment
 python -m venv venv
-source venv/bin/activate
 
+# Activate the virtual environment
 # On Windows:
-# python -m venv venv
-# venv\Scripts\activate
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+```
 
-# Install required packages
+### 3. Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
+### 4. Set Up OpenAI API Access
 
-### 2. Set Up the `.env` File for OpenAI API Access
+Create a `.env` file in the project root directory with your OpenAI API key:
 
-This project uses the OpenAI API (via Langchain's `ChatOpenAI`) to evaluate patient eligibility. To enable API calls, create a `.env` file in your project root with your OpenAI API key. For example:
-
-```dotenv
+```
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-### 3. Organize Your Data
+### 5. Download and Organize Data
 
-Make sure your data is organized as follows:
+#### Patient Data (CCDA Records)
 
-```python
-project-root/
+1. Download the synthetic patient data from: [Synthea Sample Data - CCDA](https://synthetichealth.github.io/synthea-sample-data/downloads/latest/synthea_sample_data_ccda_latest.zip)
+2. Extract the ZIP file
+3. Move the extracted folder (`synthea_sample_data_ccda_latest`) to the `data/` directory in the project
+
+> **Note** : You can also use your own patient data in CCDA XML format.
+
+#### 6. Verify Directory Structure
+
+Your project directory should look like this:
+
+```
+clinical-trial-matcher/
 ├── data/
-│   ├── synthea_sample_data_ccda_latest/   # Extracted patient CCDA XML files
-│   └── ctg-studies.json                    # Clinical trials JSON file
+│   ├── synthea_sample_data_ccda_latest/   # Patient CCDA XML files
+│   └── ctg-studies.json                   # (Optional) Clinical trials JSON file
 ├── src/                                   # Source code directory
+├── .env                                   # OpenAI API key
+├── requirements.txt
 └── README.md
 ```
 
+## Running the Pipeline
 
-### 4. Running the Pipeline
+1. Navigate to the source directory:
 
-Once the environment is set up and the data is organized, follow these steps to run the full pipeline:
+```bash
+cd src
+```
 
-1. Navigate to the `src` Directory:
-2. ```bash
-   cd src
-   ```
-
-
-2. Run the Combined Pipeline:
-
-Execute the `combined_pipeline.py` script to process the data and generate outputs. For example:
+2. Run the main pipeline script:
 
 ```bash
 python combined_pipeline.py
 ```
 
+3. The results will be available in the `data/results` directory, with both JSON and Excel format outputs.
 
-This command performs the following steps:
+## Command-Line Options
 
-* **Data Preparation:**
+The pipeline supports various command-line arguments for customization:
 
-  Parses and imports trial data from `ctg-studies.json` into a SQLite database and creates a vector database using ChromaDB.
-* **Patient Processing:**
+```bash
+python combined_pipeline.py [OPTIONS]
+```
 
-  Reads the CCDA files from the Synthea dataset, extracts key clinical details, and generates semantic search queries.
-* **Matching and Ranking:**
+| Option                     | Description                                       | Default                                      |
+| -------------------------- | ------------------------------------------------- | -------------------------------------------- |
+| `--patient`or `-p`     | Path to a patient CCDA XML file or directory      | `../data/synthea_sample_data_ccda_latest/` |
+| `--trials-json`or `-j` | Path to the clinical trials JSON file             | `../data/ctg-studies.json`                 |
+| `--sqlite-db`or `-s`   | Path to the SQLite database                       | `../data/clinical_trials.db`               |
+| `--chroma-db`or `-c`   | Path to the ChromaDB directory                    | `../data/chroma_db`                        |
+| `--output-dir`or `-o`  | Directory to store output files                   | `../data/results`                          |
+| `--sample-size`          | Number of trials to sample from JSON              | `500`                                      |
+| `--batch-size`or `-b`  | Number of trials to process in each batch         | `100`                                      |
+| `--top-k`or `-k`       | Number of top trials to evaluate for eligibility  | `10`                                       |
+| `--model`or `-m`       | LLM model to use for eligibility evaluation       | `gpt-4o-mini`                              |
+| `--max-patients`         | Maximum number of patients to process (0 for all) | `1`                                        |
+| `--no-scrape`            | Skip scraping trials from ClinicalTrials.gov      | Scraping enabled by default                  |
+| `--force-scrape`         | Force re-scraping even if trials JSON exists      | False                                        |
 
-  Matches each patient to eligible clinical trials based on demographic filters and semantic similarity.
-* **Eligibility Evaluation:**
+### Examples
 
-  Uses the OpenAI API to evaluate whether the patient meets the inclusion criteria for each trial.
-* **Output Generation:**
+Process a specific patient file:
 
-  Produces both JSON and Excel files summarizing eligible trials for each patient.
+```bash
+python combined_pipeline.py --patient ../data/synthea_sample_data_ccda_latest/specific_patient.xml
+```
 
+Process more patients and trials:
 
-### 5. Command-Line Options
+```bash
+python combined_pipeline.py --max-patients 5 --sample-size 1000 --top-k 20
+```
 
-`combined_pipeline.py` supports various command-line arguments to customize the pipeline. Some of the options include:
+Use an existing trials JSON file without scraping:
 
-* `--patient` or `-p`: Path to a single patient CCDA XML file or a directory containing multiple patient files.
-* `--trials-json` or `-j`: Path to the clinical trials JSON file.
-* `--sqlite-db` or `-s`: Path for the SQLite database (it will be created if it does not exist).
-* `--chroma-db` or `-c`: Path for the ChromaDB vector database.
-* `--output-dir` or `-o`: Directory to store output files.
-* `--sample-size`, `--batch-size`, `--top-k`, and `--model`: Additional parameters for sampling and eligibility evaluation.
+```bash
+python combined_pipeline.py --no-scrape --trials-json ../data/my_trials.json
+```
+
+## Output Files
+
+The pipeline generates several output files:
+
+* **JSON format** : Detailed eligibility results for each patient
+* **Excel files** : Formatted eligibility reports
+* **Simple format files** : Condensed results focusing on matched trials only
+* `patient_[ID]_simple_eligibility_[DATE].json`
+* `patient_[ID]_simple_eligibility_[DATE].xlsx`
+
+For multiple patients, additional summary files are generated:
+
+* `all_patients_simple_[DATE].json`
+* `all_patients_simple_[DATE].xlsx`
+
+## Troubleshooting
+
+* **OpenAI API Errors** : Ensure your API key is correctly set in the `.env` file
+* **Memory Issues** : Reduce `--sample-size` or `--batch-size` if encountering memory problems
+* **Missing Libraries** : Verify all dependencies are installed with `pip install -r requirements.txt`
+* **Run Time:** for default settings, the entire pipeline takes about 6 minutes to run. Adding more patients or trials will likely take longer.
+
+## Sample Excel and JSON Output (50 patients, 10,000 trials, took 2 hours)
+
+[https://drive.google.com/drive/folders/12_qzbUu4XScOX9lQsA69i3ZIj4fRbiI6?usp=drive_link]()
