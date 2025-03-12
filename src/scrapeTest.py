@@ -5,7 +5,7 @@ import os
 from urllib.parse import quote
 
 class ClinicalTrialsDownloader:
-    def __init__(self, base_url="https://clinicaltrials.gov", output_file="ctg-studies.json"):
+    def __init__(self, base_url="https://clinicaltrials.gov", output_file="../data/ctg-studies.json"):
         self.base_url = base_url
         self.output_file = output_file
         self.api_endpoint = "/api/v2/studies"
@@ -86,7 +86,7 @@ class ClinicalTrialsDownloader:
         print(f"Download completed. Total studies retrieved: {total_retrieved}")
         print(f"The data has been saved to {self.output_file}")
         print(f"You can now process it with your database script using:")
-        print(f"python your_db_script.py --input {self.output_file} --output clinical_trials.db --sample 5000")
+        print(f"python process_trials.py --input {self.output_file} --output ../data/clinical_trials.db --sample 5000")
         return self.all_studies
 
     def _check_api_status(self):
@@ -105,6 +105,9 @@ class ClinicalTrialsDownloader:
     def _save_to_file(self):
         """Save all retrieved studies to a JSON file in the same format as the website download"""
         try:
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
+
             # Save directly as an array of studies, not inside a "studies" object
             with open(self.output_file, 'w', encoding='utf-8') as f:
                 json.dump(self.all_studies, f, indent=2)
@@ -123,8 +126,8 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Download actively recruiting clinical trials from ClinicalTrials.gov")
-    parser.add_argument("--output", "-o", type=str, default="ctg-studies.json",
-                        help="Output file path (default: ctg-studies.json)")
+    parser.add_argument("--output", "-o", type=str, default="../data/ctg-studies.json",
+                        help="Output file path (default: ../data/ctg-studies.json)")
     args = parser.parse_args()
 
     # Define the specific fields you want to download (matching your requirements)

@@ -172,7 +172,10 @@ cython_debug/
 
 fhir
 
-data
-
 *.jsonl
 *.db
+
+chroma_db
+results
+synthea_sample_data_ccda_latest
+ctg-studies.json
