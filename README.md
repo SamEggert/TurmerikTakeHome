@@ -22,8 +22,8 @@ This pipeline automates the process of matching patients to clinical trials by:
 ### 1. Clone the Repository
 
 ```bash
-git clone [repository-url]
-cd clinical-trial-matcher
+git clone git clone https://github.com/SamEggert/TurmerikTakeHome.git
+cd TurmerikTakeHome
 ```
 
 ### 2. Create a Virtual Environment
@@ -68,10 +68,9 @@ OPENAI_API_KEY=your_openai_api_key_here
 Your project directory should look like this:
 
 ```
-clinical-trial-matcher/
+TurmerikTakeHome/
 ├── data/
 │   ├── synthea_sample_data_ccda_latest/   # Patient CCDA XML files
-│   └── ctg-studies.json                   # (Optional) Clinical trials JSON file
 ├── src/                                   # Source code directory
 ├── .env                                   # OpenAI API key
 ├── requirements.txt
