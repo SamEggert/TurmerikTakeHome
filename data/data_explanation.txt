@@ -1,0 +1,7 @@
+Put your directory containing the patient .xml records in here!
+
+
+Default: "synthea_sample_data_ccda_latest"
+
+Can download from:
+https://synthetichealth.github.io/synthea-sample-data/downloads/latest/synthea_sample_data_ccda_latest.zip

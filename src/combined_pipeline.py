@@ -24,6 +24,7 @@ from src.createVectorDB import create_corpus_db
 from src.findTrialsByChroma import match_and_rank_trials, print_patient_summary
 from src.evaluatePatientEligibility import evaluate_patient_eligibility
 from src.generateOutput import generate_output
+from src.scrapeTrials import ClinicalTrialsDownloader
 
 def process_single_patient(
     patient_file_path,
@@ -144,10 +145,13 @@ def run_pipeline(
     batch_size=100,
     top_k=10,
     model_name="gpt-4o-mini",
-    max_patients=20
+    max_patients=20,
+    scrape_trials=True,  # Default changed to True
+    force_scrape=False
 ):
     """
     Run the entire clinical trial matching pipeline for one or multiple patients:
+    0. Scrape the latest clinical trials from ClinicalTrials.gov (skip if disabled or file exists)
     1. Parse the clinical trials JSON and create SQLite database
     2. Create vector database from SQLite
     3-6. Process each patient (parse, match, evaluate, generate output)
@@ -164,12 +168,54 @@ def run_pipeline(
         top_k: Number of top trials to evaluate
         model_name: LLM model to use for eligibility evaluation
         max_patients: Maximum number of patients to process (0 for all)
+        scrape_trials: Whether to scrape trials from ClinicalTrials.gov (default: True)
+        force_scrape: Whether to force scraping even if the JSON file exists
 
     Returns:
         Dictionary with paths to output files
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
+
+    # Step 0: Scrape clinical trials from ClinicalTrials.gov if needed
+    if scrape_trials:
+        print(f"\n{'='*80}\nStep 0: Checking/Scraping clinical trials from ClinicalTrials.gov\n{'='*80}")
+        if not os.path.exists(trials_json_path) or force_scrape:
+            # Create directory for trials JSON if it doesn't exist
+            os.makedirs(os.path.dirname(trials_json_path), exist_ok=True)
+
+            print(f"JSON file {'does not exist' if not os.path.exists(trials_json_path) else 'exists but force scrape enabled'}")
+            print(f"Downloading latest clinical trials data from ClinicalTrials.gov...")
+
+            downloader = ClinicalTrialsDownloader(output_file=trials_json_path)
+
+            # Define the specific fields you want to download
+            fields = [
+                "protocolSection.identificationModule.nctId",
+                "protocolSection.identificationModule.briefTitle",
+                "protocolSection.descriptionModule.briefSummary",
+                "protocolSection.conditionsModule.conditions",
+                "protocolSection.designModule.phases",
+                "protocolSection.designModule.enrollmentInfo.count",
+                "protocolSection.armsInterventionsModule.interventions.type",
+                "protocolSection.armsInterventionsModule.interventions.name",
+                "protocolSection.eligibilityModule.eligibilityCriteria",
+                "protocolSection.eligibilityModule.healthyVolunteers",
+                "protocolSection.eligibilityModule.sex",
+                "protocolSection.eligibilityModule.genderBased",
+                "protocolSection.eligibilityModule.genderDescription",
+                "protocolSection.eligibilityModule.minimumAge",
+                "protocolSection.eligibilityModule.maximumAge",
+                "protocolSection.eligibilityModule.stdAges",
+                "protocolSection.eligibilityModule.studyPopulation",
+                "protocolSection.eligibilityModule.samplingMethod"
+            ]
+
+            downloader.download_studies(fields=fields)
+            print(f"Trials successfully scraped and saved to {trials_json_path}")
+        else:
+            print(f"Using existing trials JSON file at {trials_json_path}")
+            print(f"To download fresh data, use --force-scrape flag")
 
     # Step 1: Process clinical trials JSON to SQLite if needed
     print(f"\n{'='*80}\nStep 1: Creating/Using SQLite database from clinical trials JSON\n{'='*80}")
@@ -328,8 +374,8 @@ def main():
                       help="Directory to store output files")
 
     parser.add_argument("--sample-size", type=int,
-                      default=10000,
-                      help="Number of trials to sample from the JSON (default: 10000)")
+                      default=500,
+                      help="Number of trials to sample from the JSON (default: 1000)")
 
     parser.add_argument("--batch-size", "-b", type=int,
                       default=100,
@@ -337,26 +383,28 @@ def main():
 
     parser.add_argument("--top-k", "-k", type=int,
                       default=10,
-                      help="Number of top trials to evaluate for eligibility (default: 20)")
+                      help="Number of top trials to evaluate for eligibility (default: 10)")
 
     parser.add_argument("--model", "-m", type=str,
                       default="gpt-4o-mini",
                       help="LLM model to use for eligibility evaluation (default: gpt-4o-mini)")
 
     parser.add_argument("--max-patients", type=int,
-                      default=50,
-                      help="Maximum number of patients to process (default: 20, 0 for all)")
+                      default=1,
+                      help="Maximum number of patients to process (default: 1, 0 for all)")
+
+    # Add new arguments for trial scraping - now default is True, flag disables it
+    parser.add_argument("--no-scrape", action="store_true",
+                      help="Skip scraping clinical trials from ClinicalTrials.gov (scraping is on by default)")
+
+    parser.add_argument("--force-scrape", action="store_true",
+                      help="Force re-scraping even if trials JSON file exists")
 
     args = parser.parse_args()
 
     # Check that patient path exists
     if not os.path.exists(args.patient):
         print(f"Error: Patient path not found at {args.patient}")
-        return
-
-    # Check that trials JSON exists
-    if not os.path.exists(args.trials_json):
-        print(f"Error: Clinical trials JSON not found at {args.trials_json}")
         return
 
     # Run the pipeline
@@ -371,7 +419,9 @@ def main():
         batch_size=args.batch_size,
         top_k=args.top_k,
         model_name=args.model,
-        max_patients=args.max_patients
+        max_patients=args.max_patients,
+        scrape_trials=not args.no_scrape,  # Scraping is on by default, flag turns it off
+        force_scrape=args.force_scrape
     )
 
     # Inside main() function, in the final output section, add:
