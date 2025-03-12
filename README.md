@@ -160,4 +160,4 @@ For multiple patients, additional summary files are generated:
 
 ## Sample Excel and JSON Output (50 patients, 10,000 trials, took 2 hours)
 
-[https://drive.google.com/drive/folders/12_qzbUu4XScOX9lQsA69i3ZIj4fRbiI6?usp=drive_link]()
+[Take Home Output (Google Drive))]([https://drive.google.com/drive/folders/12_qzbUu4XScOX9lQsA69i3ZIj4fRbiI6?usp=drive_link]())
